@@ -21,18 +21,19 @@ init(autoreset=True)
 
 class ShadeBot:
     def __init__(self):
+        # Header တွေကို Screenshot ထဲကအတိုင်း ပိုတူအောင် ပြင်ထားပါတယ်
         self.base_headers = {
             "accept": "*/*",
             "accept-encoding": "gzip, deflate, br, zstd",
             "accept-language": "en-US,en;q=0.9",
             "content-type": "application/json",
-            "sec-ch-ua": '"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
+            "sec-ch-ua": '"Chromium";v="138", "Not(A:Brand";v="8", "Herond";v="138"',
             "sec-ch-ua-mobile": "?0",
             "sec-ch-ua-platform": '"Windows"',
             "sec-fetch-dest": "empty",
             "sec-fetch-mode": "cors",
             "sec-fetch-site": "same-origin",
-            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
         }
 
     def welcome(self):
@@ -52,7 +53,7 @@ class ShadeBot:
         headers = self.base_headers.copy()
         headers["authority"] = f"{subdomain}.shadenetwork.io"
         headers["origin"] = f"https://{subdomain}.shadenetwork.io"
-        headers["referer"] = f"https://{subdomain}.shadenetwork.io/"
+        headers["referer"] = f"https://{subdomain}.shadenetwork.io/dashboard"
         
         if auth_token and subdomain == "points":
             headers["authorization"] = f"Bearer {auth_token}"
@@ -65,57 +66,15 @@ class ShadeBot:
     
     def log(self, message, level="INFO"):
         time_str = self.get_wib_time()
-        
-        if level == "INFO":
-            color = Fore.CYAN
-            symbol = "[INFO]"
-        elif level == "SUCCESS":
-            color = Fore.GREEN
-            symbol = "[SUCCESS]"
-        elif level == "ERROR":
-            color = Fore.RED
-            symbol = "[ERROR]"
-        elif level == "WARNING":
-            color = Fore.YELLOW
-            symbol = "[WARNING]"
-        elif level == "CYCLE":
-            color = Fore.MAGENTA
-            symbol = "[CYCLE]"
-        else:
-            color = Fore.WHITE
-            symbol = "[LOG]"
-        
-        print(f"[{time_str}] {color}{symbol} {message}{Style.RESET_ALL}")
-    
-    def random_delay(self):
-        delay = random.randint(3, 7)
-        self.log(f"Delay {delay} seconds...", "INFO")
-        time.sleep(delay)
-    
-    def show_menu(self):
-        print(f"{Fore.CYAN}============================================================{Style.RESET_ALL}")
-        print(f"{Fore.CYAN}Select Mode:{Style.RESET_ALL}")
-        print(f"{Fore.GREEN}1. Run with proxy")
-        print(f"2. Run without proxy{Style.RESET_ALL}")
-        print(f"{Fore.CYAN}============================================================{Style.RESET_ALL}")
-        
-        while True:
-            try:
-                choice = input(f"{Fore.GREEN}Enter your choice (1/2): {Style.RESET_ALL}").strip()
-                if choice in ['1', '2']:
-                    return choice
-                else:
-                    print(f"{Fore.RED}Invalid choice! Please enter 1 or 2.{Style.RESET_ALL}")
-            except KeyboardInterrupt:
-                print(f"\n{Fore.RED}Program terminated by user.{Style.RESET_ALL}")
-                exit(0)
+        colors = {"INFO": Fore.CYAN, "SUCCESS": Fore.GREEN, "ERROR": Fore.RED, "WARNING": Fore.YELLOW, "CYCLE": Fore.MAGENTA}
+        color = colors.get(level, Fore.WHITE)
+        print(f"[{time_str}] {color}[{level}] {message}{Style.RESET_ALL}")
     
     def countdown(self, seconds):
         for i in range(seconds, 0, -1):
-            hours = i // 3600
-            minutes = (i % 3600) // 60
-            secs = i % 60
-            print(f"\r[COUNTDOWN] Next cycle in: {hours:02d}:{minutes:02d}:{secs:02d} ", end="", flush=True)
+            hours, rem = divmod(i, 3600)
+            mins, secs = divmod(rem, 60)
+            print(f"\r[COUNTDOWN] Next cycle in: {hours:02d}:{mins:02d}:{secs:02d} ", end="", flush=True)
             time.sleep(1)
         print("\r" + " " * 60 + "\r", end="", flush=True)
 
@@ -123,156 +82,102 @@ class ShadeBot:
         try:
             with open(filename, 'r') as f:
                 return [line.strip() for line in f if line.strip()]
-        except FileNotFoundError:
-            return []
-    
-    def format_proxy(self, proxy_str):
-        if not proxy_str:
-            return None
-        if "://" not in proxy_str:
-            parts = proxy_str.split(':')
-            if len(parts) == 4:
-                proxy_str = f"http://{parts[2]}:{parts[3]}@{parts[0]}:{parts[1]}"
-            elif len(parts) == 2:
-                proxy_str = f"http://{proxy_str}"
-            else:
-                if "@" not in proxy_str:
-                     proxy_str = f"http://{proxy_str}"
-        return {"http": proxy_str, "https": proxy_str}
+        except FileNotFoundError: return []
 
     def get_signature_data(self, private_key):
-        try:
-            w3 = Web3()
-            pk = private_key.strip()
-            if pk.startswith('0x'):
-                pk = pk[2:]
-            
-            pk_with_prefix = '0x' + pk
-            account = w3.eth.account.from_key(pk_with_prefix)
-            address = to_checksum_address(account.address)
-            timestamp = int(time.time() * 1000)
-            message = f"Shade Points: Create account for {address.lower()} at {timestamp}"
-            encoded_message = encode_defunct(text=message)
-            signed_message = w3.eth.account.sign_message(encoded_message, private_key=pk_with_prefix)
-            signature = signed_message.signature.hex()
-            
-            if not signature.startswith('0x'):
-                signature = '0x' + signature
-            
-            return address, timestamp, signature, message
-        except Exception as e:
-            self.log(f"Error in signature generation: {str(e)}", "ERROR")
-            raise
+        w3 = Web3()
+        pk = '0x' + private_key.strip().replace('0x', '')
+        account = w3.eth.account.from_key(pk)
+        address = to_checksum_address(account.address)
+        timestamp = int(time.time() * 1000)
+        # Screenshot ထဲက Message format အတိုင်း ပြင်ထားပါတယ်
+        message = f"Shade Points: Create account for {address.lower()} at {timestamp}"
+        encoded_message = encode_defunct(text=message)
+        signed_message = w3.eth.account.sign_message(encoded_message, private_key=pk)
+        return address, timestamp, signed_message.signature.hex(), message
 
     def do_login(self, private_key, proxies):
         try:
             address, timestamp, signature, message = self.get_signature_data(private_key)
+            if not signature.startswith('0x'): signature = '0x' + signature
+            
+            # Step 1: User Check (Screenshot ထဲက GET user request)
+            self.log(f"Checking wallet: {address[:6]}...{address[-4:]}", "INFO")
+            user_url = f"https://points.shadenetwork.io/api/auth/user?wallet={address.lower()}"
+            requests.get(user_url, headers=self.get_headers("points"), proxies=proxies, timeout=30)
+            
+            # Step 2: Session POST (Screenshot ထဲက session request)
             payload = {"address": address, "timestamp": timestamp, "signature": signature}
+            response = requests.post(
+                "https://points.shadenetwork.io/api/auth/session",
+                headers=self.get_headers("points"),
+                json=payload,
+                proxies=proxies,
+                timeout=30
+            )
             
-            self.log(f"Logging in: {address[:6]}...{address[-4:]}", "INFO")
-            headers = self.get_headers("points")
-            
-            response = requests.post("https://points.shadenetwork.io/api/auth/session", headers=headers, json=payload, proxies=proxies, timeout=30)
-            
-            if response.status_code in [200, 201]:
+            try:
                 data = response.json()
                 if "token" in data:
-                    self.log("Login successful!", "SUCCESS")
+                    self.log("Login Successful!", "SUCCESS")
                     return data['token'], address
+                else:
+                    self.log(f"Login Failed: {data.get('message', 'No token found')}", "ERROR")
+            except ValueError:
+                self.log(f"Server Error (Not JSON). Status: {response.status_code}", "ERROR")
+                # Cloudflare က block ရင် response text ကို စစ်ဖို့:
+                # print(response.text[:200]) 
+                
         except Exception as e:
-            self.log(f"Login error: {str(e)}", "ERROR")
+            self.log(f"Login Exception: {str(e)}", "ERROR")
         return None, None
 
     def do_claim(self, token, proxies):
-        headers = self.get_headers("points", auth_token=token)
         try:
-            self.log("Processing Daily Claim...", "INFO")
-            self.random_delay()
-            response = requests.post("https://points.shadenetwork.io/api/claim", headers=headers, json={}, proxies=proxies, timeout=30)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    self.log(f"Claim Success! Reward: +{data.get('reward')} | Streak: {data.get('streak')} days", "SUCCESS")
-                    self.log(f"Total Points: {data.get('newPoints', 0):,}", "SUCCESS")
-            elif response.status_code in [400, 429]:
-                self.log("Already claimed for today", "WARNING")
-        except Exception:
-            self.log("Claim error occurred", "ERROR")
-
-    def verify_twitter(self, token, proxies):
-        headers = self.get_headers("points", auth_token=token)
-        headers["referer"] = "https://points.shadenetwork.io/quests"
-        quests = [{"questId": "social_001", "title": "Follow Twitter"}, {"questId": "social_002", "title": "Like Tweet"}, {"questId": "social_003", "title": "Retweet"}]
-        try:
-            for quest in quests:
-                self.random_delay()
-                response = requests.post("https://points.shadenetwork.io/api/quests/verify-twitter", headers=headers, json={"questId": quest["questId"]}, proxies=proxies, timeout=30)
-                if response.status_code == 200 and response.json().get("verified"):
-                    self.log(f"Twitter Quest '{quest['title']}' Verified!", "SUCCESS")
-        except Exception: pass
-
-    def verify_discord(self, token, proxies):
-        headers = self.get_headers("points", auth_token=token)
-        headers["referer"] = "https://points.shadenetwork.io/quests"
-        quests = [{"questId": "social_006", "title": "Join Discord"}, {"questId": "social_007", "title": "Send Message"}]
-        try:
-            for quest in quests:
-                self.random_delay()
-                response = requests.post("https://points.shadenetwork.io/api/quests/verify-discord", headers=headers, json={"questId": quest["questId"]}, proxies=proxies, timeout=30)
-                if response.status_code == 200 and response.json().get("verified"):
-                    self.log(f"Discord Quest '{quest['title']}' Verified!", "SUCCESS")
-        except Exception: pass
+            self.log("Claiming Daily Points...", "INFO")
+            res = requests.post("https://points.shadenetwork.io/api/claim", headers=self.get_headers("points", token), json={}, proxies=proxies, timeout=30)
+            if res.status_code == 200:
+                data = res.json()
+                self.log(f"Success! Reward: +{data.get('reward')} | Total: {data.get('newPoints', 0):,}", "SUCCESS")
+            else: self.log("Already claimed or error.", "WARNING")
+        except: pass
 
     def do_faucet(self, address, proxies):
-        headers = self.get_headers("wallet")
         try:
-            self.log("Processing Faucet Claim...", "INFO")
-            self.random_delay()
-            response = requests.post("https://wallet.shadenetwork.io/api/faucet", headers=headers, json={"address": address}, proxies=proxies, timeout=60)
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    self.log(f"Faucet Claimed! Amount: {data.get('amount')} SHD", "SUCCESS")
-            elif response.status_code in [404, 429]:
-                self.log("Faucet already claimed or unavailable", "WARNING")
-        except Exception as e:
-            self.log(f"Faucet error: {str(e)}", "WARNING")
+            self.log("Claiming Faucet...", "INFO")
+            res = requests.post("https://wallet.shadenetwork.io/api/faucet", headers=self.get_headers("wallet"), json={"address": address}, proxies=proxies, timeout=60)
+            if res.status_code == 200 and res.json().get("success"):
+                self.log(f"Faucet Success: {res.json().get('amount')} SHD", "SUCCESS")
+            else: self.log("Faucet unavailable.", "WARNING")
+        except: pass
 
     def run(self):
         self.welcome()
-        mode = self.show_menu()
+        print(f"{Fore.CYAN}1. Proxy Mode | 2. No Proxy{Style.RESET_ALL}")
+        mode = input("Choice: ").strip()
         use_proxy = (mode == '1')
         
-        private_keys = self.load_file("accounts.txt")
-        proxies_list = self.load_file("proxy.txt")
+        accounts = self.load_file("accounts.txt")
+        proxies = self.load_file("proxy.txt")
         
-        if not private_keys:
-            self.log("accounts.txt is empty!", "ERROR")
-            return
+        if not accounts: return self.log("No accounts found!", "ERROR")
 
-        self.log(f"Loaded {len(private_keys)} accounts", "INFO")
         cycle = 1
         while True:
             self.log(f"Cycle #{cycle} Started", "CYCLE")
-            success_count = 0
-            
-            for i, pk in enumerate(private_keys):
-                current_proxy = self.format_proxy(proxies_list[i % len(proxies_list)]) if use_proxy and proxies_list else None
-                self.log(f"Account #{i+1}/{len(private_keys)}", "INFO")
+            for i, pk in enumerate(accounts):
+                current_proxy = {"http": f"http://{proxies[i%len(proxies)]}", "https": f"http://{proxies[i%len(proxies)]}"} if use_proxy and proxies else None
                 
+                self.log(f"Account {i+1}/{len(accounts)}", "INFO")
                 token, address = self.do_login(pk, current_proxy)
-                if token and address:
-                    success_count += 1
+                
+                if token:
                     self.do_claim(token, current_proxy)
-                    self.verify_twitter(token, current_proxy)
-                    self.verify_discord(token, current_proxy)
                     self.do_faucet(address, current_proxy)
                 
-                if i < len(private_keys) - 1:
-                    time.sleep(2)
+                time.sleep(2)
             
-            self.log(f"Cycle #{cycle} Complete | Success: {success_count}/{len(private_keys)}", "CYCLE")
+            self.log(f"Cycle #{cycle} Complete", "CYCLE")
             cycle += 1
             self.countdown(86400)
 
