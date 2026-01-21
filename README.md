@@ -26,7 +26,7 @@ Register here: [https://points.shadenetwork.io/ref/1law552s](https://points.shad
 
 1. Clone this repository:
 ```bash
-git clone https://github.com/‌adbteamnode/shade.git && cd shade
+git clone https://github.com/adbteamnode/shade.git && cd shade
 ```
 
 2. Install required packages:
