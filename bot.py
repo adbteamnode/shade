@@ -17,31 +17,26 @@ warnings.filterwarnings('ignore')
 init(autoreset=True)
 
 # ==========================================
-# ပြင်ဆင်ရန် အပိုင်း
-# ==========================================
 REFERRAL_CODE = "1law552s" 
 # ==========================================
 
 class ShadeBot:
     def __init__(self):
-        # Device မတူအောင် Browser Fingerprint အမျိုးမျိုး သတ်မှတ်ခြင်း
         self.user_agents = [
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0"
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
         ]
 
     def welcome(self):
         print(f"""
-            {Fore.GREEN + Style.BRIGHT}      █████╗ ██████╗ ██████╗     ███╗   ██╗ ██████╗ ██████╗ ███████╗
-            {Fore.GREEN + Style.BRIGHT}     ██╔══██╗██╔══██╗██╔══██╗    ████╗  ██║██╔═══██╗██╔══██╗██╔════╝
-            {Fore.GREEN + Style.BRIGHT}     ███████║██║  ██║██████╔╝    ██╔██╗ ██║██║   ██║██║  ██║█████╗  
-            {Fore.GREEN + Style.BRIGHT}     ██╔══██║██║  ██║██╔══██╗    ██║╚██╗██║██║   ██║██║  ██║██╔══╝  
-            {Fore.GREEN + Style.BRIGHT}     ██║  ██║██████╔╝██████╔╝    ██║ ╚████║╚██████╔╝██████╔╝███████╗
-            {Fore.GREEN + Style.BRIGHT}     ╚═╝  ╚═╝╚═════╝ ╚═════╝     ╚═╝  ╚═══╝ ╚═════╝ ╚═════╝ ╚══════╝
-            {Fore.YELLOW + Style.BRIGHT}      Ultimate Multi-Account Bot (Protection Enabled)
+{Fore.GREEN + Style.BRIGHT} ██████╗██╗  ██╗ █████╗ ██████╗ ███████╗
+{Fore.GREEN + Style.BRIGHT}██╔════╝██║  ██║██╔══██╗██╔══██╗██╔════╝
+{Fore.GREEN + Style.BRIGHT}╚█████╗ ███████║███████║██║  ██║█████╗  
+{Fore.GREEN + Style.BRIGHT} ╚═══██╗██╔══██║██╔══██║██║  ██║██╔══╝  
+{Fore.GREEN + Style.BRIGHT}██████╔╝██║  ██║██║  ██║██████╔╝███████╗
+{Fore.GREEN + Style.BRIGHT}╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝ ╚══════╝
+{Fore.YELLOW + Style.BRIGHT}    SHADE NETWORK MULTI-BOT | ADB NODE
         """)
 
     def log(self, message, level="INFO"):
@@ -73,12 +68,11 @@ class ShadeBot:
         ua = random.choice(self.user_agents)
         scraper = cloudscraper.create_scraper(browser={'custom_browser': ua, 'platform': 'windows', 'desktop': True})
         proxies = self.format_proxy(p_str)
-        
         address, timestamp, signature = self.get_signature_data(pk)
+        
         if not address: return
-        
         self.log(f"Account {idx}: {address[:6]}...{address[-4:]}", "INFO")
-        
+
         headers = {
             "accept": "*/*",
             "content-type": "application/json",
@@ -88,32 +82,28 @@ class ShadeBot:
         }
 
         try:
-            # Login / Registration logic
-            payload = {
-                "address": address, 
-                "timestamp": timestamp, 
-                "signature": signature if signature.startswith('0x') else '0x'+signature,
-                "referralCode": REFERRAL_CODE
-            }
+            # Login/Register
+            payload = {"address": address, "timestamp": timestamp, "signature": signature if signature.startswith('0x') else '0x'+signature, "referralCode": REFERRAL_CODE}
+            scraper.get(f"https://points.shadenetwork.io/api/auth/user?wallet={address.lower()}", headers=headers, proxies=proxies, timeout=20)
+            auth_res = scraper.post("https://points.shadenetwork.io/api/auth/session", headers=headers, json=payload, proxies=proxies, timeout=20)
             
-            # Step 1: User Verification
-            scraper.get(f"https://points.shadenetwork.io/api/auth/user?wallet={address.lower()}", headers=headers, proxies=proxies, timeout=30)
-            
-            # Step 2: Session
-            log_res = scraper.post("https://points.shadenetwork.io/api/auth/session", headers=headers, json=payload, proxies=proxies, timeout=30)
-            
-            if log_res.status_code in [200, 201]:
-                token = log_res.json().get('token')
-                headers["authorization"] = f"Bearer {token}"
+            if auth_res.status_code in [200, 201]:
+                token = auth_res.json().get('token')
                 self.log("Login Success", "SUCCESS")
                 
-                # Daily Claim
-                claim_res = scraper.post("https://points.shadenetwork.io/api/claim", headers=headers, json={}, proxies=proxies, timeout=30)
-                if claim_res.status_code == 200:
-                    self.log(f"Claimed: +{claim_res.json().get('reward')} pts", "SUCCESS")
-                else: self.log("Already claimed today", "WARNING")
+                auth_headers = headers.copy()
+                auth_headers["authorization"] = f"Bearer {token}"
 
-                # Quests (Twitter & Discord)
+                # 1. Daily Claim
+                try:
+                    c_res = scraper.post("https://points.shadenetwork.io/api/claim", headers=auth_headers, json={}, proxies=proxies, timeout=20)
+                    if c_res.status_code == 200:
+                        self.log(f"Daily Claim: +{c_res.json().get('reward')} pts", "SUCCESS")
+                    else:
+                        self.log("Daily Claim: Already done", "WARNING")
+                except: pass
+
+                # 2. Quests (Twitter & Discord) - Force Run
                 quests = [
                     ("verify-twitter", "social_001", "Follow Twitter"),
                     ("verify-twitter", "social_002", "Like Tweet"),
@@ -123,23 +113,26 @@ class ShadeBot:
                 ]
                 
                 for endpoint, qid, name in quests:
-                    q_headers = headers.copy()
-                    q_headers["referer"] = "https://points.shadenetwork.io/quests"
-                    q_res = scraper.post(f"https://points.shadenetwork.io/api/quests/{endpoint}", headers=q_headers, json={"questId": qid}, proxies=proxies, timeout=30)
-                    if q_res.status_code == 200:
-                        self.log(f"Quest: {name} Verified", "SUCCESS")
-                    time.sleep(2)
+                    try:
+                        q_headers = auth_headers.copy()
+                        q_headers["referer"] = "https://points.shadenetwork.io/quests"
+                        q_res = scraper.post(f"https://points.shadenetwork.io/api/quests/{endpoint}", headers=q_headers, json={"questId": qid}, proxies=proxies, timeout=20)
+                        if q_res.status_code == 200:
+                            self.log(f"Quest: {name} Verified", "SUCCESS")
+                        else:
+                            self.log(f"Quest: {name} Skip (Done/Error)", "WARNING")
+                        time.sleep(1.5)
+                    except: pass
 
-                # Faucet
-                f_headers = {"authority": "wallet.shadenetwork.io", "referer": "https://wallet.shadenetwork.io/", "user-agent": ua}
-                scraper.post("https://wallet.shadenetwork.io/api/faucet", headers=f_headers, json={"address": address}, proxies=proxies, timeout=30)
-                self.log("Faucet Processed", "SUCCESS")
+                # 3. Faucet
+                try:
+                    f_headers = {"authority": "wallet.shadenetwork.io", "referer": "https://wallet.shadenetwork.io/", "user-agent": ua}
+                    scraper.post("https://wallet.shadenetwork.io/api/faucet", headers=f_headers, json={"address": address}, proxies=proxies, timeout=20)
+                    self.log("Faucet Processed", "SUCCESS")
+                except: pass
 
-            else:
-                self.log(f"Login Failed: {log_res.status_code}", "ERROR")
-
-        except Exception as e:
-            self.log(f"Connection Error: {str(e)[:50]}...", "ERROR")
+            else: self.log(f"Login Failed: {auth_res.status_code}", "ERROR")
+        except Exception as e: self.log(f"Error: Connection Issue", "ERROR")
 
     def run(self):
         self.welcome()
@@ -158,10 +151,9 @@ class ShadeBot:
             for i, pk in enumerate(accounts):
                 p_str = proxies[i % len(proxies)] if proxies else None
                 self.do_work(pk, p_str, i+1)
-                
                 if i < len(accounts) - 1:
-                    wait = random.randint(10, 20)
-                    self.log(f"Waiting {wait}s for safety...", "INFO")
+                    wait = random.randint(8, 15)
+                    self.log(f"Waiting {wait}s...", "INFO")
                     time.sleep(wait)
             
             self.log("Cycle Done. Waiting 24h...", "CYCLE")
