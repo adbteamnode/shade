@@ -25,8 +25,11 @@ class ShadeBot:
             "accept": "*/*",
             "accept-language": "en-US,en;q=0.9",
             "content-type": "application/json",
-            "referer": "https://points.shadenetwork.io/dashboard",
-            "origin": "https://points.shadenetwork.io"
+            "origin": "https://points.shadenetwork.io",
+            "sec-ch-ua": '"Chromium";v="138", "Not(A:Brand";v="8", "Herond";v="138"',
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "same-origin"
         }
 
     def welcome(self):
@@ -37,7 +40,7 @@ class ShadeBot:
             {Fore.GREEN + Style.BRIGHT}     ██╔══██║██║  ██║██╔══██╗    ██║╚██╗██║██║   ██║██║  ██║██╔══╝  
             {Fore.GREEN + Style.BRIGHT}     ██║  ██║██████╔╝██████╔╝    ██║ ╚████║╚██████╔╝██████╔╝███████╗
             {Fore.GREEN + Style.BRIGHT}     ╚═╝  ╚═╝╚═════╝ ╚═════╝     ╚═╝  ╚═══╝ ╚═════╝ ╚═════╝ ╚══════╝
-            {Fore.YELLOW + Style.BRIGHT}      Modified by ADB NODE (Proxy Authenticated)
+            {Fore.YELLOW + Style.BRIGHT}      Modified by ADB NODE (Task Logic Fixed)
         """)
 
     def log(self, message, level="INFO"):
@@ -61,78 +64,100 @@ class ShadeBot:
             return None, None, None, None
 
     def format_proxy(self, proxy_str):
-        """သင်ပေးထားတဲ့ http://user:pass@ip:port format ကို သေချာဖတ်ပေးမယ့် function"""
         if not proxy_str: return None
         proxy_str = proxy_str.strip()
-        
-        # အရှေ့မှာ http:// မပါရင် ထည့်ပေးမယ်
-        if not proxy_str.startswith('http'):
-            proxy_str = f"http://{proxy_str}"
-            
-        return {
-            "http": proxy_str,
-            "https": proxy_str
-        }
+        if not proxy_str.startswith('http'): proxy_str = f"http://{proxy_str}"
+        return {"http": proxy_str, "https": proxy_str}
 
     def do_login(self, private_key, proxies):
         try:
             address, timestamp, signature, _ = self.get_signature_data(private_key)
             if not address: return None, None
             
-            self.log(f"Wallet: {address[:6]}... (Using Proxy)", "INFO")
-            user_url = f"https://points.shadenetwork.io/api/auth/user?wallet={address.lower()}"
+            headers = self.base_headers.copy()
+            headers["referer"] = "https://points.shadenetwork.io/dashboard"
             
             # Step 1: Wallet Verification
-            self.scraper.get(user_url, headers=self.base_headers, proxies=proxies, timeout=30)
+            user_url = f"https://points.shadenetwork.io/api/auth/user?wallet={address.lower()}"
+            self.scraper.get(user_url, headers=headers, proxies=proxies, timeout=30)
             
             # Step 2: Session Login
             payload = {"address": address, "timestamp": timestamp, "signature": signature if signature.startswith('0x') else '0x'+signature}
-            response = self.scraper.post("https://points.shadenetwork.io/api/auth/session", headers=self.base_headers, json=payload, proxies=proxies, timeout=30)
+            response = self.scraper.post("https://points.shadenetwork.io/api/auth/session", headers=headers, json=payload, proxies=proxies, timeout=30)
             
             if response.status_code in [200, 201]:
                 data = response.json()
                 if "token" in data:
-                    self.log("Login Success!", "SUCCESS")
+                    self.log(f"Login Success: {address[:6]}...", "SUCCESS")
                     return data['token'], address
-            self.log(f"Login Failed (Status {response.status_code})", "ERROR")
+            self.log(f"Login Failed: {response.status_code}", "ERROR")
         except Exception as e:
-            self.log(f"Proxy Connection Error: Check your proxy format", "ERROR")
+            self.log(f"Login Error: {str(e)}", "ERROR")
         return None, None
 
     def do_claim(self, token, proxies):
         try:
             headers = self.base_headers.copy()
             headers["authorization"] = f"Bearer {token}"
+            headers["referer"] = "https://points.shadenetwork.io/dashboard"
             res = self.scraper.post("https://points.shadenetwork.io/api/claim", headers=headers, json={}, proxies=proxies, timeout=30)
             if res.status_code == 200:
                 data = res.json()
-                if data.get("success"):
-                    self.log(f"Daily Claim: +{data.get('reward')} | Total: {data.get('newPoints'):,}", "SUCCESS")
-                else: self.log("Already claimed today", "WARNING")
+                self.log(f"Daily Claim: +{data.get('reward')} | Total: {data.get('newPoints'):,}", "SUCCESS")
+            else:
+                self.log("Daily Claim: Already claimed or not available", "WARNING")
         except: pass
 
     def verify_quests(self, token, proxies):
-        quests = [
+        """Task တွေကို အရင်ကုဒ်ဟောင်းထဲကအတိုင်း တစ်ခုချင်းစီ သေချာလုပ်ပေးမယ့်အပိုင်း"""
+        headers = self.base_headers.copy()
+        headers["authorization"] = f"Bearer {token}"
+        headers["referer"] = "https://points.shadenetwork.io/quests"
+        
+        # Twitter Quests
+        tw_quests = [
             {"id": "social_001", "name": "Follow Twitter"},
             {"id": "social_002", "name": "Like Tweet"},
-            {"id": "social_003", "name": "Retweet"},
+            {"id": "social_003", "name": "Retweet"}
+        ]
+        # Discord Quests
+        dc_quests = [
             {"id": "social_006", "name": "Join Discord"},
             {"id": "social_007", "name": "Send Discord Message"}
         ]
-        headers = self.base_headers.copy()
-        headers["authorization"] = f"Bearer {token}"
-        for q in quests:
+
+        # Process Twitter
+        for q in tw_quests:
             try:
-                endpoint = "verify-twitter" if "social_001" in q["id"] or "social_002" in q["id"] or "social_003" in q["id"] else "verify-discord"
-                self.scraper.post(f"https://points.shadenetwork.io/api/quests/{endpoint}", headers=headers, json={"questId": q["id"]}, proxies=proxies, timeout=30)
+                self.log(f"Processing {q['name']}...", "INFO")
+                res = self.scraper.post("https://points.shadenetwork.io/api/quests/verify-twitter", headers=headers, json={"questId": q["id"]}, proxies=proxies, timeout=30)
+                if res.status_code == 200 and res.json().get("verified"):
+                    self.log(f"Success: {q['name']}", "SUCCESS")
+                time.sleep(2)
+            except: pass
+
+        # Process Discord
+        for q in dc_quests:
+            try:
+                self.log(f"Processing {q['name']}...", "INFO")
+                res = self.scraper.post("https://points.shadenetwork.io/api/quests/verify-discord", headers=headers, json={"questId": q["id"]}, proxies=proxies, timeout=30)
+                if res.status_code == 200 and res.json().get("verified"):
+                    self.log(f"Success: {q['name']}", "SUCCESS")
+                time.sleep(2)
             except: pass
 
     def do_faucet(self, address, proxies):
         try:
+            self.log("Processing Faucet...", "INFO")
             f_headers = self.base_headers.copy()
+            f_headers.pop("origin", None)
             f_headers["authority"] = "wallet.shadenetwork.io"
             f_headers["referer"] = "https://wallet.shadenetwork.io/"
-            self.scraper.post("https://wallet.shadenetwork.io/api/faucet", headers=f_headers, json={"address": address}, proxies=proxies, timeout=60)
+            res = self.scraper.post("https://wallet.shadenetwork.io/api/faucet", headers=f_headers, json={"address": address}, proxies=proxies, timeout=60)
+            if res.status_code == 200 and res.json().get("success"):
+                self.log(f"Faucet Success: {res.json().get('amount')} SHD", "SUCCESS")
+            else:
+                self.log("Faucet: Already claimed or limit reached", "WARNING")
         except: pass
 
     def run(self):
@@ -142,25 +167,26 @@ class ShadeBot:
         try:
             accounts = [line.strip() for line in open("accounts.txt") if line.strip()]
             proxies_list = [line.strip() for line in open("proxy.txt") if line.strip()] if mode == '1' else []
-        except Exception as e:
-            self.log(f"File missing: {str(e)}", "ERROR")
+        except:
+            self.log("Required files missing!", "ERROR")
             return
 
         while True:
-            self.log("New Cycle Started", "CYCLE")
+            self.log("--- New Cycle Started ---", "CYCLE")
             for i, pk in enumerate(accounts):
                 p = self.format_proxy(proxies_list[i % len(proxies_list)]) if proxies_list else None
                 self.log(f"Account {i+1}/{len(accounts)}", "INFO")
                 
                 token, addr = self.do_login(pk, p)
                 if token:
-                    self.do_claim(token, p)
-                    self.verify_quests(token, p)
-                    self.do_faucet(addr, p)
+                    # အရင်ကုဒ်ဟောင်းမှာပါတဲ့ အစဉ်လိုက်အတိုင်း လုပ်ဆောင်ခြင်း
+                    self.do_claim(token, p)      # Daily Points
+                    self.verify_quests(token, p)  # Twitter & Discord Quests
+                    self.do_faucet(addr, p)      # Faucet
                 
-                time.sleep(random.randint(5, 8))
+                time.sleep(random.randint(5, 10))
             
-            self.log("Cycle Completed. Waiting 24h...", "CYCLE")
+            self.log("Cycle Completed. Waiting for 24h...", "CYCLE")
             time.sleep(86400)
 
 if __name__ == "__main__":
