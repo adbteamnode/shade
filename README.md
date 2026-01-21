@@ -4,7 +4,7 @@ Automated bot for Shade Network that handles daily claims, quest completion, act
 
 ## Register
 
-Register here: [https://points.shadenetwork.io/ref/6pvefkoy](https://points.shadenetwork.io/ref/6pvefkoy)
+Register here: [https://points.shadenetwork.io/ref/1law552s](https://points.shadenetwork.io/ref/1law552s)
 
 ## Features
 
@@ -26,8 +26,7 @@ Register here: [https://points.shadenetwork.io/ref/6pvefkoy](https://points.shad
 
 1. Clone this repository:
 ```bash
-git clone https://github.com/febriyan9346/Shade-Auto-Bot.git
-cd Shade-Auto-Bot
+git clone https://github.com/‌adbteamnode/shade.git && cd shade
 ```
 
 2. Install required packages:
@@ -94,18 +93,6 @@ Shade-Auto-Bot/
 - Use at your own risk
 - This bot is for educational purposes
 
-## Requirements.txt
-
-Create a `requirements.txt` file with:
-```
-web3>=6.0.0
-requests>=2.31.0
-colorama>=0.4.6
-pytz>=2023.3
-eth-account>=0.9.0
-eth-utils>=2.2.0
-```
-
 ## Troubleshooting
 
 **Login Failed**
@@ -126,26 +113,3 @@ eth-utils>=2.2.0
 ## Disclaimer
 
 This bot is for educational purposes only. Use at your own risk. The developer is not responsible for any losses or damages.
-
-## Support Us with Cryptocurrency
-
-You can make a contribution using any of the following blockchain networks:
-
-| Network | Wallet Address |
-|---------|---------------|
-| **EVM** | `0x216e9b3a5428543c31e659eb8fea3b4bf770bdfd` |
-| **TON** | `UQCEzXLDalfKKySAHuCtBZBARCYnMc0QsTYwN4qda3fE6tto` |
-| **SOL** | `9XgbPg8fndBquuYXkGpNYKHHhymdmVhmF6nMkPxhXTki` |
-| **SUI** | `0x8c3632ddd46c984571bf28f784f7c7aeca3b8371f146c4024f01add025f993bf` |
-
-## Credits
-
-Created by: **FEBRIYAN**
-
-## License
-
-MIT License - feel free to use and modify
-
----
-
-⭐ If this bot helps you, please star this repository!
