@@ -10,7 +10,6 @@ from web3 import Web3
 from eth_account.messages import encode_defunct
 from eth_utils import to_checksum_address
 
-# Screen Clear
 os.system('clear' if os.name == 'posix' else 'cls')
 import warnings
 warnings.filterwarnings('ignore')
@@ -74,15 +73,11 @@ class ShadeBot:
         self.captcha_solver = CaptchaSolver(self)
 
     def welcome(self):
-        print(f"""
-            {Fore.GREEN + Style.BRIGHT}      █████╗ ██████╗ ██████╗     ███╗   ██╗ ██████╗ ██████╗ ███████╗
-            {Fore.GREEN + Style.BRIGHT}     ██╔══██╗██╔══██╗██╔══██╗    ████╗  ██║██╔═══██╗██╔══██╗██╔════╝
-            {Fore.GREEN + Style.BRIGHT}     ███████║██║  ██║██████╔╝    ██╔██╗ ██║██║   ██║██║  ██║█████╗  
-            {Fore.GREEN + Style.BRIGHT}     ██╔══██║██║  ██║██╔══██╗    ██║╚██╗██║██║   ██║██║  ██║██╔══╝  
-            {Fore.GREEN + Style.BRIGHT}     ██║  ██║██████╔╝██████╔╝    ██║ ╚████║╚██████╔╝██████╔╝███████╗
-            {Fore.GREEN + Style.BRIGHT}     ╚═╝  ╚═╝╚═════╝ ╚═════╝     ╚═╝  ╚═══╝ ╚═════╝ ╚═════╝ ╚══════╝
-            {Fore.YELLOW + Style.BRIGHT}      Ultimate Multi-Account Bot (Faucet & Quests Enabled)
-        """)
+        # Removed all Block characters to prevent Encoding Error
+        print(Fore.GREEN + Style.BRIGHT + "========================================")
+        print(Fore.GREEN + Style.BRIGHT + "       SHADE NETWORK BOT v2.0           ")
+        print(Fore.GREEN + Style.BRIGHT + "    FAUCET & QUESTS AUTO-PROCESSOR      ")
+        print(Fore.GREEN + Style.BRIGHT + "========================================")
 
     def log(self, message, level="INFO"):
         wib = pytz.timezone('Asia/Jakarta')
@@ -162,7 +157,7 @@ class ShadeBot:
                 requests.post("https://points.shadenetwork.io/api/claim", headers=auth_headers, json={}, proxies=proxies)
                 self.log("Daily Claim Processed", "SUCCESS")
 
-                # Faucet
+                # Faucet Claim
                 self.do_faucet(address, proxies)
 
                 # Quests
@@ -213,13 +208,16 @@ class ShadeBot:
     def run(self):
         self.welcome()
         try:
-            pks = open("accounts.txt", "r").read().splitlines()
+            with open("accounts.txt", "r") as f:
+                pks = f.read().splitlines()
         except FileNotFoundError:
             self.log("accounts.txt missing!", "ERROR")
             return
 
         proxies = []
-        try: proxies = open("proxy.txt", "r").read().splitlines()
+        try:
+            with open("proxy.txt", "r") as f:
+                proxies = f.read().splitlines()
         except: pass
 
         while True:
