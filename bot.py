@@ -17,15 +17,61 @@ warnings.filterwarnings('ignore')
 
 init(autoreset=True)
 
+class CaptchaSolver:
+    def __init__(self, bot_instance):
+        self.bot = bot_instance
+        self.page_url = "https://wallet.shadenetwork.io"
+        self.site_key = "0x4AAAAAACN1moBrJQ-mAzdh"
+    
+    def read_api_key(self):
+        try:
+            with open("2captcha.txt", "r") as f:
+                return f.read().strip()
+        except FileNotFoundError:
+            return None
+    
+    def solve_2captcha(self):
+        api_key = self.read_api_key()
+        if not api_key:
+            self.bot.log("2captcha.txt missing!", "ERROR")
+            return None
+        
+        url_create = "https://api.2captcha.com/createTask"
+        payload = {
+            "clientKey": api_key,
+            "task": { "type": "TurnstileTaskProxyless", "websiteURL": self.page_url, "websiteKey": self.site_key }
+        }
+        
+        try:
+            self.bot.log("Solving Captcha via 2Captcha...", "INFO")
+            response = requests.post(url_create, json=payload, timeout=30)
+            result = response.json()
+            if result.get("errorId") != 0:
+                self.bot.log(f"2Captcha Error: {result.get('errorDescription')}", "ERROR")
+                return None
+            
+            task_id = result.get("taskId")
+            url_result = "https://api.2captcha.com/getTaskResult"
+            
+            for _ in range(60):
+                time.sleep(5)
+                check = requests.post(url_result, json={"clientKey": api_key, "taskId": task_id})
+                res = check.json()
+                if res.get("status") == "ready":
+                    return res.get("solution", {}).get("token")
+            return None
+        except Exception as e:
+            self.bot.log(f"Captcha Error: {str(e)}", "ERROR")
+            return None
+
 class ShadeBot:
     def __init__(self):
         self.base_headers = {
             "accept": "*/*",
             "content-type": "application/json",
             "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
-            "origin": "https://points.shadenetwork.io",
-            "referer": "https://points.shadenetwork.io/quests"
         }
+        self.captcha_solver = CaptchaSolver(self)
 
     def welcome(self):
         print(f"""
@@ -35,7 +81,7 @@ class ShadeBot:
             {Fore.GREEN + Style.BRIGHT}     ██╔══██║██║  ██║██╔══██╗    ██║╚██╗██║██║   ██║██║  ██║██╔══╝  
             {Fore.GREEN + Style.BRIGHT}     ██║  ██║██████╔╝██████╔╝    ██║ ╚████║╚██████╔╝██████╔╝███████╗
             {Fore.GREEN + Style.BRIGHT}     ╚═╝  ╚═╝╚═════╝ ╚═════╝     ╚═╝  ╚═══╝ ╚═════╝ ╚═════╝ ╚══════╝
-            {Fore.YELLOW + Style.BRIGHT}      Ultimate Multi-Account Bot (Protection Enabled)
+            {Fore.YELLOW + Style.BRIGHT}      Ultimate Multi-Account Bot (Faucet & Quests Enabled)
         """)
 
     def log(self, message, level="INFO"):
@@ -57,6 +103,36 @@ class ShadeBot:
             return address, timestamp, signed_message.signature.hex()
         except: return None, None, None
 
+    def do_faucet(self, address, proxies):
+        self.log("Starting Faucet Claim...", "INFO")
+        c_token = self.captcha_solver.solve_2captcha()
+        if not c_token:
+            self.log("Captcha Solve Failed. Faucet Skipped.", "WARNING")
+            return
+
+        faucet_headers = {
+            "accept": "*/*",
+            "accept-language": "en-US,en;q=0.9",
+            "content-type": "application/json",
+            "origin": "https://wallet.shadenetwork.io",
+            "referer": "https://wallet.shadenetwork.io/",
+            "user-agent": self.base_headers["user-agent"]
+        }
+        
+        f_url = "https://wallet.shadenetwork.io/api/drip"
+        payload = {"address": address, "turnstileToken": c_token}
+        
+        try:
+            time.sleep(2)
+            res = requests.post(f_url, json=payload, headers=faucet_headers, proxies=proxies, timeout=60)
+            if res.status_code == 200:
+                data = res.json()
+                self.log(f"Faucet SUCCESS: {data.get('amount', 'Unknown')} SHD Received", "SUCCESS")
+            else:
+                self.log(f"Faucet Status: {res.status_code}", "WARNING")
+        except Exception as e:
+            self.log(f"Faucet Error: {str(e)}", "ERROR")
+
     def process_account(self, pk, p_str, idx):
         proxies = None
         if p_str:
@@ -69,21 +145,27 @@ class ShadeBot:
         self.log(f"Account {idx}: {address[:8]}...", "INFO")
         
         try:
-            # Login
             payload = {"address": address, "timestamp": timestamp, "signature": signature if signature.startswith('0x') else '0x'+signature}
-            res = requests.post("https://points.shadenetwork.io/api/auth/session", headers=self.base_headers, json=payload, proxies=proxies, timeout=30)
+            login_headers = self.base_headers.copy()
+            login_headers["origin"] = "https://points.shadenetwork.io"
+            login_headers["referer"] = "https://points.shadenetwork.io/"
+            
+            res = requests.post("https://points.shadenetwork.io/api/auth/session", headers=login_headers, json=payload, proxies=proxies, timeout=30)
             
             if res.status_code in [200, 201]:
                 token = res.json().get('token')
                 self.log("Login Success", "SUCCESS")
-                auth_headers = self.base_headers.copy()
+                auth_headers = login_headers.copy()
                 auth_headers["authorization"] = f"Bearer {token}"
 
                 # Daily Claim
                 requests.post("https://points.shadenetwork.io/api/claim", headers=auth_headers, json={}, proxies=proxies)
                 self.log("Daily Claim Processed", "SUCCESS")
 
-                # Quests (Twitter & Discord) - Two-Step Verification Logic
+                # Faucet
+                self.do_faucet(address, proxies)
+
+                # Quests
                 quests = [
                     ("verify-twitter", "social_001", "Follow Twitter"),
                     ("verify-twitter", "social_002", "Like Tweet"),
@@ -95,7 +177,6 @@ class ShadeBot:
                 for endpoint, qid, name in quests:
                     try:
                         self.log(f"Starting {name}...", "INFO")
-                        # Step 1: Verification to get Proof
                         v_res = requests.post(
                             f"https://points.shadenetwork.io/api/quests/{endpoint}", 
                             headers=auth_headers, 
@@ -109,7 +190,6 @@ class ShadeBot:
                                 proof = v_data.get("proof")
                                 self.log(f"Verification Proof received for {name}", "SUCCESS")
                                 
-                                # Step 2: Complete Quest using the Proof
                                 time.sleep(random.randint(2, 4))
                                 c_res = requests.post(
                                     "https://points.shadenetwork.io/api/quests/complete",
@@ -119,10 +199,8 @@ class ShadeBot:
                                 )
                                 if c_res.status_code == 200:
                                     self.log(f"Quest {name} fully completed!", "SUCCESS")
-                                else:
-                                    self.log(f"Could not complete {name}", "WARNING")
                             else:
-                                self.log(f"{name} is already done or not eligible.", "WARNING")
+                                self.log(f"{name} already done or not eligible.", "WARNING")
                         
                         time.sleep(random.randint(3, 5))
                     except Exception as e:
@@ -134,24 +212,26 @@ class ShadeBot:
 
     def run(self):
         self.welcome()
-        mode = input("1. Proxy Mode | 2. No Proxy: ").strip()
-        
-        if not os.path.exists("accounts.txt"):
-            print("accounts.txt not found!")
+        try:
+            pks = open("accounts.txt", "r").read().splitlines()
+        except FileNotFoundError:
+            self.log("accounts.txt missing!", "ERROR")
             return
-            
-        accounts = [line.strip() for line in open("accounts.txt") if line.strip()]
-        proxies = [line.strip() for line in open("proxy.txt") if line.strip()] if mode == '1' and os.path.exists("proxy.txt") else []
+
+        proxies = []
+        try: proxies = open("proxy.txt", "r").read().splitlines()
+        except: pass
 
         while True:
-            for i, pk in enumerate(accounts):
-                p_str = proxies[i % len(proxies)] if proxies else None
-                self.process_account(pk, p_str, i+1)
-                if i < len(accounts) - 1:
-                    time.sleep(random.randint(5, 10))
+            for idx, pk in enumerate(pks, 1):
+                p_str = proxies[idx % len(proxies)] if proxies else None
+                self.process_account(pk, p_str, idx)
+                print("-" * 65)
+                time.sleep(3)
             
-            self.log("Cycle Done. Waiting 24h...", "CYCLE")
+            self.log("Cycle Finished. Waiting 24 Hours.", "CYCLE")
             time.sleep(86400)
 
 if __name__ == "__main__":
-    ShadeBot().run()
+    bot = ShadeBot()
+    bot.run()
